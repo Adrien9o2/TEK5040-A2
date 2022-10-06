@@ -260,7 +260,7 @@ class Agent(tf.keras.models.Model):
         return action
 
 def main():
-    
+    tf.keras.backend.set_floatx('float32')
     run_name = "ppo_linear"
     base_dir = "train_out/" + run_name + "/"
     os.makedirs(base_dir, exist_ok=True)
@@ -271,13 +271,13 @@ def main():
     action_encoder = ActionEncoder()
     feature_extractor = FeatureExtractor(conv=False, dense_hidden_units=0)
     policy_network = PolicyNetwork(feature_extractor, action_encoder.num_actions)
-    policy_network._set_inputs(np.zeros([1, 96, 96, 3],dtype='float64'))
+    policy_network._set_inputs(np.zeros([1, 96, 96, 3],dtype='float32'))
     # Use to generate encoded actions (not just indices)
     agent = Agent(policy_network, action_encoder)
-    agent._set_inputs(np.zeros([1, 96, 96, 3],dtype='float64'))
+    agent._set_inputs(np.zeros([1, 96, 96, 3],dtype='float32'))
 
     # use to keep track of best model
-    mean_high = tf.Variable(0, dtype='float64', name='mean_high', trainable=False)
+    mean_high = tf.Variable(0, dtype='float32', name='mean_high', trainable=False)
 
     # possibly share parameters with policy-network
     value_network = ValueNetwork(feature_extractor, hidden_units=0)
