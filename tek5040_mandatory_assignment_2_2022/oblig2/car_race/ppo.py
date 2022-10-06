@@ -100,6 +100,13 @@ def calculate_returns(rewards, gamma):
     """
 
     returns = np.zeros(len(rewards), dtype=np.float32)
+    Tmax = len(rewards)-1
+    returns[Tmax] = pow(gamma,Tmax)*rewards[Tmax]
+    for i in range(Tmax-1,-1,-1):
+        returns[i] = returns[i+1] + pow(gamma,i)*rewards[i]
+   
+
+
     # TODO: Calculate returns
 
     return returns
@@ -114,9 +121,14 @@ def value_loss(target, prediction):
     Returns:
         loss : mean squared error difference between predictions and targets
     """
+    toret = tf.reduce_mean(tf.pow(target-prediction,2))
+
     # TODO: Implement value loss
 
-    return tf.zeros(tf.shape(target), dtype=tf.float32) # Remove this line
+    return toret
+    
+
+    #return tf.zeros(tf.shape(target), dtype=tf.float32) # Remove this line
 
 def policy_loss(pi_a, pi_old_a, advantage, epsilon):
     """Calculate policy loss as in https://arxiv.org/abs/1707.06347
@@ -135,9 +147,18 @@ def policy_loss(pi_a, pi_old_a, advantage, epsilon):
     """
 
     # TODO: implement policy loss
-    loss = tf.constant(0, dtype=tf.float32) # remove this line
+    #loss = tf.constant(0, dtype=tf.float32) # remove this line
+    ui = tf.divide(pi_a,pi_old_a)
+    clippArray =  tf.clip_by_value(ui,1-epsilon,1+epsilon)
 
-    return loss
+    lossArray = tf.minimum(tf.multiply(ui,advantage),tf.multiply(clippArray,advantage))
+
+
+    toret = -tf.reduce_mean(lossArray)
+
+
+
+    return toret
 
 def estimate_improvement(pi_a, pi_old_a, advantage, t, gamma):
     """Calculate sample contributions to estimated improvement, ignoring changes to
@@ -196,6 +217,8 @@ def entropy(p):
     """Entropy base 2, for each sample in batch."""
 
     log_p = tf.math.log(p + 1e-6) # add small number to avoid log(0)
+
+
     # use log2 for easier intepretation
     log2_p = log_p / np.log(2)
 
@@ -215,8 +238,10 @@ def entropy_loss(pi):
     Returns:
         scalar, average negative entropy for the distributions
     """
-    
-    return -tf.reduce_mean(entropy(pi))
+
+    toret = -tf.reduce_mean(entropy(pi)) 
+
+    return toret
     
 
 class Agent(tf.keras.models.Model):
@@ -235,7 +260,7 @@ class Agent(tf.keras.models.Model):
         return action
 
 def main():
-
+    
     run_name = "ppo_linear"
     base_dir = "train_out/" + run_name + "/"
     os.makedirs(base_dir, exist_ok=True)
@@ -246,21 +271,21 @@ def main():
     action_encoder = ActionEncoder()
     feature_extractor = FeatureExtractor(conv=False, dense_hidden_units=0)
     policy_network = PolicyNetwork(feature_extractor, action_encoder.num_actions)
-    policy_network._set_inputs(np.zeros([1, 96, 96, 3]))
+    policy_network._set_inputs(np.zeros([1, 96, 96, 3],dtype='float64'))
     # Use to generate encoded actions (not just indices)
     agent = Agent(policy_network, action_encoder)
-    agent._set_inputs(np.zeros([1, 96, 96, 3]))
+    agent._set_inputs(np.zeros([1, 96, 96, 3],dtype='float64'))
 
     # use to keep track of best model
-    mean_high = tf.Variable(0, dtype='float32', name='mean_high', trainable=False)
+    mean_high = tf.Variable(0, dtype='float64', name='mean_high', trainable=False)
 
     # possibly share parameters with policy-network
     value_network = ValueNetwork(feature_extractor, hidden_units=0)
 
     iterations = 500
     K = 3
-    num_episodes = 8
-    maxlen_environment = 512
+    num_episodes = 2 #8 
+    maxlen_environment = 12 #512
     action_repeat = 4
     maxlen = maxlen_environment // action_repeat # max number of actions
     batch_size = 32
@@ -326,11 +351,25 @@ def main():
         # variables of both 'policy_network' and 'value_network', and update the
         # variables using the optimizer.
         for epoch in range(K):
+            loss = 0
             for batch in dataset:
-                observation, action, advantage, pi_old, value_target, t = batch
+                with tf.GradientTape(persistent=True) as tape:
+                    observation, action, advantage, pi_old, value_target, t = batch
+                    v = value_network(observation,maxlen-t)
+                    logits = policy_network.policy(observation)
+                    pi = activations.softmax(logits)
+                    pi_a = tf.gather(pi, action, batch_dims=1)
+                    pi_old_a = tf.gather(pi_old, action, batch_dims=1)
 
+
+                    loss = policy_loss(pi_a, pi_old_a, advantage, epsilon) + c1*value_loss(value_target, v) + c2*entropy_loss(pi)   
+
+                gradsv = tape.gradient(loss,value_network.trainable_variables)
+                optimizer.apply_gradients(zip(gradsv,value_network.trainable_variables))
+                gradsp = tape.gradient(loss,policy_network.trainable_variables)
+                optimizer.apply_gradients(zip(gradsp,policy_network.trainable_variables))
         print("Iteration %d. Optimized surrogate loss in %f sec." %
-              (iteration, time.time()-start))
+(iteration, time.time()-start))
 
         ############################## Summaries ###############################
         step = iteration + 1
