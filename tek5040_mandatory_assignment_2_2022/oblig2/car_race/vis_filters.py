@@ -4,6 +4,10 @@ import tensorflow as tf
 from tensorflow.keras import layers
 import argparse
 
+import os
+
+
+
 
 def _rows_cols(num_filters):
 
@@ -98,7 +102,7 @@ def get_agent(policy):
     return agent
 
 def main(policy):
-
+    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     agent = get_agent(policy)
     #agent(tf.zeros([1, 96, 96, 3]))
     #agent.dense.build(tf.TensorShape([96, 96, 3]))

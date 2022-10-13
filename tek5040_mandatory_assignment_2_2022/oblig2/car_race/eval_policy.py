@@ -6,6 +6,7 @@ import time
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 import sys
+import os
 
 sys.path.append("../")
 
@@ -73,7 +74,7 @@ def eval_policy(agent, num_steps, num_episodes, action_repeat=1):
     return scores, best_episode
 
 def main(agent, num_steps, num_episodes, action_repeat, render_best=True):
-
+    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     scores, best_episode = eval_policy(agent, num_steps, num_episodes, action_repeat=action_repeat)
 
     print("min, max : (%g, %g)"  % (np.min(scores), np.max(scores)))
